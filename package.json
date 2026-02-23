@@ -1,0 +1,42 @@
+{
+  "name": "error-shield",
+  "version": "1.0.0",
+  "description": "A comprehensive error handling utility for Node.js applications with Express.js middleware support",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "error",
+    "error-shield",
+    "error-handling",
+    "express",
+    "middleware",
+    "typescript",
+    "nodejs",
+    "exception",
+    "error-management",
+    "error-handler",
+    "custom-error",
+    "error-utility"
+  ],
+  "author": "Gopinath Kathirvel",
+  "license": "ISC",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": ""
+  }
+}
