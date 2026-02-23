@@ -1,6 +1,6 @@
 {
   "name": "error-shield",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "A comprehensive error handling utility for Node.js applications with Express.js middleware support",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
