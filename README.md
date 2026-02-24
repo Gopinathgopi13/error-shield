@@ -21,13 +21,13 @@ custom error classes, async wrappers, Express middleware, and 40+ HTTP error cre
 
 ## ✨ Why Error Shield?
 
-| Pain Point                                        | How Error Shield Helps                              |
-| :------------------------------------------------ | :-------------------------------------------------- |
-| ❌ Inconsistent error responses across routes     | ✅ Uniform `ErrorDetails` structure everywhere      |
-| ❌ Boilerplate `try/catch` in every async handler | ✅ `asyncHandler()` wraps it for you                |
-| ❌ Manually setting status codes & messages       | ✅ 40+ pre-built `ErrorCreators` with correct codes |
-| ❌ No context attached to errors for debugging    | ✅ `AppError` carries structured `context` data     |
-| ❌ Missing TypeScript types for errors            | ✅ Full type definitions included                   |
+| Pain Point                                        | How Error Shield Helps                          |
+| :------------------------------------------------ | :---------------------------------------------- |
+| ❌ Inconsistent error responses across routes     | ✅ Uniform `ErrorDetails` structure everywhere  |
+| ❌ Boilerplate `try/catch` in every async handler | ✅ `asyncHandler()` wraps it for you            |
+| ❌ Manually setting status codes & messages       | ✅ 40+ pre-built `Errors` with correct codes    |
+| ❌ No context attached to errors for debugging    | ✅ `AppError` carries structured `context` data |
+| ❌ Missing TypeScript types for errors            | ✅ Full type definitions included               |
 
 ---
 
@@ -54,13 +54,13 @@ Get up and running in **under 60 seconds**:
 const {
   AppError,
   handleError,
-  ErrorCreators,
+  Errors,
   expressErrorHandler,
   asyncHandler,
 } = require("error-shield");
 
 // 1️⃣ Throw meaningful errors
-throw ErrorCreators.notFound("User not found", { userId: 42 });
+throw Errors.notFound("User not found", { userId: 42 });
 
 // 2️⃣ Handle & format any error
 const details = handleError(new Error("Oops"), { includeStack: true });
@@ -141,25 +141,25 @@ console.log(errorDetails);
 Use pre-built error factories for common HTTP errors — no need to memorize status codes:
 
 ```javascript
-const { ErrorCreators } = require("error-shield");
+const { Errors } = require("error-shield");
 
 // 🔴 400 — Bad Request
-throw ErrorCreators.badRequest("Invalid input provided", { field: "email" });
+throw Errors.badRequest("Invalid input provided", { field: "email" });
 
 // 🔒 401 — Unauthorized
-throw ErrorCreators.unauthorized("Authentication required");
+throw Errors.unauthorized("Authentication required");
 
 // 🔍 404 — Not Found
-throw ErrorCreators.notFound("User not found", { userId: 123 });
+throw Errors.notFound("User not found", { userId: 123 });
 
 // ✏️ 422 — Validation Error
-throw ErrorCreators.validationError("Email is required", { field: "email" });
+throw Errors.validationError("Email is required", { field: "email" });
 
 // 🚦 429 — Too Many Requests
-throw ErrorCreators.tooManyRequests("Rate limit exceeded", { retryAfter: 60 });
+throw Errors.tooManyRequests("Rate limit exceeded", { retryAfter: 60 });
 
 // 💥 500 — Internal Server Error
-throw ErrorCreators.internalServerError("Unexpected failure");
+throw Errors.internalServerError("Unexpected failure");
 ```
 
 ---
@@ -170,11 +170,7 @@ Plug in a production-ready error handler with a single line:
 
 ```javascript
 const express = require("express");
-const {
-  expressErrorHandler,
-  asyncHandler,
-  ErrorCreators,
-} = require("error-shield");
+const { expressErrorHandler, asyncHandler, Errors } = require("error-shield");
 
 const app = express();
 
@@ -184,7 +180,7 @@ app.get(
   asyncHandler(async (req, res) => {
     const user = await getUserById(req.params.id);
     if (!user) {
-      throw ErrorCreators.notFound("User not found", { userId: req.params.id });
+      throw Errors.notFound("User not found", { userId: req.params.id });
     }
     res.json(user);
   }),
@@ -332,7 +328,7 @@ Pre-built factory methods for **all standard HTTP error codes**. Every method re
 
 ```javascript
 // Signature for all creators:
-ErrorCreators.methodName(message?, context?)
+Errors.methodName(message?, context?)
 // → Returns: AppError
 ```
 
@@ -404,7 +400,7 @@ Error Shield ships with **full TypeScript declarations** — zero extra config n
 ```typescript
 import {
   AppError,
-  ErrorCreators,
+  Errors,
   handleError,
   asyncHandler,
   expressErrorHandler,
@@ -413,7 +409,7 @@ import {
 } from "error-shield";
 
 // Fully typed error creation
-const error: AppError = ErrorCreators.notFound("User not found", {
+const error: AppError = Errors.notFound("User not found", {
   userId: 42,
 });
 
@@ -438,7 +434,7 @@ Contributions, issues, and feature requests are welcome!
 
 ---
 
-## 📄 License 
+## 📄 License
 
 This project is licensed under the [ISC License](https://opensource.org/licenses/ISC).
 
