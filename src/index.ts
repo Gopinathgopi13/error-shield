@@ -21,9 +21,9 @@ export interface ErrorHandlerOptions {
   context?: Record<string, any>;
 }
 
-export type ErrorCreatorFn = (message: string, context?: Record<string, any>) => AppError;
+export type ErrorFn = (message: string, context?: Record<string, any>) => AppError;
 
-export type ErrorCreatorMap = Record<string, ErrorCreatorFn>;
+export type ErrorMap = Record<string, ErrorFn>;
 
 /**
  * Custom Error class with additional properties
@@ -160,7 +160,7 @@ export function createErrorResponse(
 /**
  * Common error creators
  */
-export const Errors: ErrorCreatorMap = {
+export const Errors: ErrorMap = {
   // 4xx Client Errors
   badRequest: (message: string, context?: Record<string, any>) =>
     new AppError(message, 400, 'BAD_REQUEST', context),
