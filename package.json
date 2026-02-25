@@ -1,7 +1,8 @@
 {
   "name": "error-shield",
-  "version": "1.2.3",
-  "description": "Comprehensive error handling utility for Node.js & Express.js — custom error classes, async handler wrapper, Express middleware, HTTP error creators, and TypeScript support.",
+  "version": "2.0.0",
+  "description": "Comprehensive error handling utility for Node.js & Express.js — custom error classes, async handler wrapper, Express middleware, HTTP error creators, retry logic, error chaining, and TypeScript support.",
+  "type": "module",
   "keywords": [
     "error-handling",
     "error-handler",
@@ -26,7 +27,11 @@
     "validation-error",
     "app-error",
     "error-utility",
-    "structured-errors"
+    "structured-errors",
+    "error-chaining",
+    "retry",
+    "retry-logic",
+    "exponential-backoff"
   ],
   "homepage": "https://github.com/Gopinathgopi13/error-shield",
   "repository": {
@@ -35,13 +40,38 @@
   },
   "author": "Gopinath Kathirvel",
   "license": "ISC",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "./dist/cjs/index.cjs",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/index.js"
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
   },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=16.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^2.0.0",
+    "@vitest/coverage-v8": "^2.0.0"
   }
 }

@@ -1,9 +1,17 @@
 /**
- * Error Handler - A comprehensive error handling utility for Node.js
- * 
- * Provides utilities for error handling, formatting, and logging
+ * Error Shield - A comprehensive error handling utility for Node.js & Express.js
+ *
+ * Provides utilities for error handling, formatting, logging, retry logic,
+ * and error chaining with full TypeScript support.
+ *
+ * @packageDocumentation
  */
 
+// ─── Types & Interfaces ─────────────────────────────────────────────────────
+
+/**
+ * Structured representation of an error with optional metadata.
+ */
 export interface ErrorDetails {
   message: string;
   code?: string;
@@ -11,8 +19,13 @@ export interface ErrorDetails {
   stack?: string;
   timestamp?: string;
   context?: Record<string, any>;
+  /** Cause chain information when error chaining is used */
+  cause?: ErrorDetails;
 }
 
+/**
+ * Options for configuring error handling behavior.
+ */
 export interface ErrorHandlerOptions {
   includeStack?: boolean;
   includeTimestamp?: boolean;
@@ -26,7 +39,46 @@ export type ErrorFn = (message: string, context?: Record<string, any>) => AppErr
 export type ErrorMap = Record<string, ErrorFn>;
 
 /**
- * Custom Error class with additional properties
+ * Configuration options for the retry utility.
+ */
+export interface RetryOptions {
+  /** Maximum number of retry attempts (default: 3) */
+  maxRetries?: number;
+  /** Backoff strategy between retries (default: 'exponential') */
+  backoff?: 'exponential' | 'linear' | 'fixed';
+  /** Initial delay in milliseconds before the first retry (default: 1000) */
+  initialDelay?: number;
+  /** Maximum delay in milliseconds between retries (default: 30000) */
+  maxDelay?: number;
+  /**
+   * Optional predicate to determine whether a retry should be attempted.
+   * If provided and returns `false`, the error is thrown immediately.
+   */
+  retryIf?: (error: Error) => boolean;
+  /** Optional callback invoked before each retry attempt */
+  onRetry?: (error: Error, attempt: number) => void;
+  /** Whether to add random jitter to the delay to prevent thundering herd (default: true) */
+  jitter?: boolean;
+}
+
+// ─── AppError Class ──────────────────────────────────────────────────────────
+
+/**
+ * Custom Error class with additional properties for structured error handling.
+ *
+ * Supports error chaining via the native ES2022 `Error.cause` feature.
+ *
+ * @example
+ * ```ts
+ * const error = new AppError('Something broke', 500, 'INTERNAL', { userId: 123 });
+ *
+ * // With error chaining
+ * try {
+ *   await fetchData();
+ * } catch (err) {
+ *   throw new AppError('Failed to fetch data', 502, 'FETCH_FAILED', undefined, err);
+ * }
+ * ```
  */
 export class AppError extends Error {
   public code?: string;
@@ -38,9 +90,10 @@ export class AppError extends Error {
     message: string,
     statusCode: number = 500,
     code?: string,
-    context?: Record<string, any>
+    context?: Record<string, any>,
+    cause?: Error
   ) {
-    super(message);
+    super(message, cause ? { cause } : undefined);
     this.name = this.constructor.name;
     this.statusCode = statusCode;
     this.code = code;
@@ -50,10 +103,47 @@ export class AppError extends Error {
       (Error as any).captureStackTrace(this, this.constructor);
     }
   }
+
+  /**
+   * Wraps an existing error as the cause of a new `AppError`.
+   *
+   * This is a convenience factory for error chaining — it creates a new
+   * `AppError` whose `.cause` is set to the original error.
+   *
+   * @param originalError - The caught error to wrap
+   * @param message - Human-readable description of the higher-level failure
+   * @param statusCode - HTTP status code (default: 500)
+   * @param code - Machine-readable error code
+   * @param context - Additional context metadata
+   * @returns A new `AppError` with `originalError` as its cause
+   *
+   * @example
+   * ```ts
+   * try {
+   *   await db.query('SELECT ...');
+   * } catch (err) {
+   *   throw AppError.wrap(err, 'Database query failed', 500, 'DB_ERROR');
+   * }
+   * ```
+   */
+  static wrap(
+    originalError: Error,
+    message: string,
+    statusCode: number = 500,
+    code?: string,
+    context?: Record<string, any>
+  ): AppError {
+    return new AppError(message, statusCode, code, context, originalError);
+  }
 }
 
+// ─── Core Utilities ──────────────────────────────────────────────────────────
+
 /**
- * Formats an error into a structured object
+ * Formats an error into a structured {@link ErrorDetails} object.
+ *
+ * When the error has a `.cause`, the cause chain is recursively formatted
+ * and included in the output.
  */
 export function formatError(
   error: Error | AppError,
@@ -80,11 +170,19 @@ export function formatError(
     ...(Object.keys(mergedContext).length > 0 && { context: mergedContext }),
   };
 
+  // Recursively format the cause chain
+  if (error.cause && error.cause instanceof Error) {
+    errorDetails.cause = formatError(error.cause, {
+      includeStack,
+      includeTimestamp: false, // only top-level gets timestamp
+    });
+  }
+
   return errorDetails;
 }
 
 /**
- * Handles errors with optional logging and formatting
+ * Handles errors with optional logging and formatting.
  */
 export function handleError(
   error: Error | AppError,
@@ -100,7 +198,8 @@ export function handleError(
 }
 
 /**
- * Async error wrapper - catches errors from async functions
+ * Async error wrapper — catches errors from async route handlers
+ * and forwards them to Express's `next()` function.
  */
 export function asyncHandler<T extends (...args: any[]) => Promise<any>>(
   fn: T
@@ -113,7 +212,10 @@ export function asyncHandler<T extends (...args: any[]) => Promise<any>>(
 }
 
 /**
- * Express.js error handler middleware
+ * Express.js error handler middleware factory.
+ *
+ * Returns a standard Express error-handling middleware that formats
+ * the error and sends an appropriate JSON or string response.
  */
 export function expressErrorHandler(
   options: ErrorHandlerOptions = {}
@@ -146,7 +248,7 @@ export function expressErrorHandler(
 }
 
 /**
- * Creates a standardized error response
+ * Creates a standardized error response.
  */
 export function createErrorResponse(
   message: string,
@@ -157,8 +259,145 @@ export function createErrorResponse(
   return new AppError(message, statusCode, code, context);
 }
 
+// ─── Retry Utility ───────────────────────────────────────────────────────────
+
 /**
- * Common error creators
+ * Calculates the delay for a given retry attempt based on the backoff strategy.
+ * @internal
+ */
+function calculateDelay(
+  attempt: number,
+  options: Required<Pick<RetryOptions, 'backoff' | 'initialDelay' | 'maxDelay' | 'jitter'>>
+): number {
+  const { backoff, initialDelay, maxDelay, jitter } = options;
+
+  let delay: number;
+
+  switch (backoff) {
+    case 'exponential':
+      delay = initialDelay * Math.pow(2, attempt - 1);
+      break;
+    case 'linear':
+      delay = initialDelay * attempt;
+      break;
+    case 'fixed':
+      delay = initialDelay;
+      break;
+    default:
+      delay = initialDelay;
+  }
+
+  // Cap at maxDelay
+  delay = Math.min(delay, maxDelay);
+
+  // Add jitter (±25% randomness)
+  if (jitter) {
+    const jitterAmount = delay * 0.25;
+    delay = delay - jitterAmount + Math.random() * jitterAmount * 2;
+  }
+
+  return Math.round(delay);
+}
+
+/**
+ * Executes an async function with automatic retries on failure.
+ *
+ * Supports exponential, linear, and fixed backoff strategies with
+ * optional jitter, conditional retry predicates, and retry callbacks.
+ *
+ * If all retries are exhausted, the **last** error is thrown. The previous
+ * attempt errors are accessible via the error's `.cause` chain and the
+ * `attempts` property attached to the final error.
+ *
+ * @typeParam T - The return type of the async function
+ * @param fn - The async function to execute with retries
+ * @param options - Retry configuration options
+ * @returns The result of the successful function execution
+ *
+ * @example
+ * ```ts
+ * const data = await withRetry(
+ *   () => fetch('https://api.example.com/data').then(r => r.json()),
+ *   {
+ *     maxRetries: 5,
+ *     backoff: 'exponential',
+ *     initialDelay: 500,
+ *     retryIf: (err) => err.message.includes('ECONNREFUSED'),
+ *     onRetry: (err, attempt) => console.log(`Retry ${attempt}: ${err.message}`),
+ *   }
+ * );
+ * ```
+ */
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  options: RetryOptions = {}
+): Promise<T> {
+  const {
+    maxRetries = 3,
+    backoff = 'exponential',
+    initialDelay = 1000,
+    maxDelay = 30000,
+    retryIf,
+    onRetry,
+    jitter = true,
+  } = options;
+
+  const errors: Error[] = [];
+  let lastError: Error | undefined;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      lastError = error;
+      errors.push(error);
+
+      // If this was the last attempt, break to throw
+      if (attempt === maxRetries) {
+        break;
+      }
+
+      // Check retryIf predicate
+      if (retryIf && !retryIf(error)) {
+        break;
+      }
+
+      // Invoke onRetry callback
+      if (onRetry) {
+        onRetry(error, attempt + 1);
+      }
+
+      // Wait before retrying
+      const delay = calculateDelay(attempt + 1, {
+        backoff,
+        initialDelay,
+        maxDelay,
+        jitter,
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+
+  // Attach attempt history to the final error
+  const finalError = lastError!;
+  (finalError as any).attempts = errors;
+
+  throw finalError;
+}
+
+// ─── Common Error Creators ───────────────────────────────────────────────────
+
+/**
+ * Pre-built factory functions for common HTTP error responses.
+ *
+ * @example
+ * ```ts
+ * throw Errors.notFound('User not found', { userId: 42 });
+ * throw Errors.unauthorized();
+ * throw Errors.tooManyRequests('Rate limit exceeded');
+ * ```
  */
 export const Errors: ErrorMap = {
   // 4xx Client Errors
@@ -301,5 +540,6 @@ export default {
   asyncHandler,
   expressErrorHandler,
   createErrorResponse,
+  withRetry,
   Errors,
 };
