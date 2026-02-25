@@ -1,6 +1,6 @@
 {
   "name": "error-shield",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Comprehensive error handling utility for Node.js & Express.js — custom error classes, async handler wrapper, Express middleware, HTTP error creators, retry logic, error chaining, and TypeScript support.",
   "type": "module",
   "keywords": [
